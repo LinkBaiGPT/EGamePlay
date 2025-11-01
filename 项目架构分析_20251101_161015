@@ -1,0 +1,87 @@
+1. 项目目标与定位
+EGamePlay 的核心目标是基于 EcsNode 实现战斗系统的实体-组件-系统（ECS）化重构，强化运行时代码的业务逻辑与视图逻辑解耦，同时提供灵活的技能配置与示例化的 RPG 演示场景。
+
+2. 目录与模块划分
+顶层结构
+仓库以 Unity 工程组织，包含 Assets、Packages、ProjectSettings、Excel 等标准目录，并额外提供 README 与 Readme 资源说明。
+
+Assets 目录
+App.Model：承载模型层代码，进一步拆分为 Base.Model、Game.Model、Game.ViewModel、Unity.Model 等，用于定义实体、组件与数据结构。
+
+App.System：存放系统层逻辑，包括 Game.System、Game.ViewSystem、Unity.AppRun 等，负责各类运行时系统注册与流程控制。
+
+App.ThirdParty：集成 EcsNode、ExpressionParser、LitJson、ETHelper 等外部依赖源码或适配层。
+
+Unity.Scripts / Unity.EditorScripts：提供 Unity Mono 行为、编辑器工具（如 SkillEditorWindow、ReferenceCollector 编辑器）等。
+
+GameResources.RpgExample / GameResources.ThirdParty：提供演示用角色、特效、材质、Prefab 等资源。
+
+Excel：存放技能、单位等 Excel 配置源文件及 md5 校验数据，用于驱动配置导出与热更新流程。
+
+3. 核心功能模块
+CombatEntity 战斗实体：封装位置、旋转、行动能力引用、行为禁制状态等，是战斗逻辑的核心载体。
+
+Ability 能力系统：以 Ability 实体承载技能/状态配置、执行体、触发器及效果集合，支持 Buff、技能等多种能力类型。
+
+AbilitySystem：负责从配置装配能力，校验目标类型，加载执行体，管理激活/挂载/卸载流程，并与 CombatEntity 的 AbilityComponent 建立索引关系。
+
+UnityAppRun：Unity 入口初始化流程，构建 Game/EcsNode 环境，加载配置收集器，实例化英雄与怪物实体，挂接 UI 组件，是示例场景的运行驱动核心。
+
+PlayerInputSystem：处理玩家右键移动输入，利用 DOTween 控制角色移动/动画，必要时停止或禁用移动，体现视图系统对战斗实体的响应。
+
+4. 技术栈与依赖
+Unity 版本：项目面向 Unity 2022.3.53f1 LTS 版本。
+
+Unity Packages：启用 Input System、Timeline、UGUI 及各类基础模块，满足战斗表现、动画与界面开发需求。
+
+商业插件：集成 DOTween Pro、Odin Inspector、Animancer Pro 提升动画、编辑器与状态控制效率。
+
+第三方源码：引入 EcsNode、ETHelper、ExpressionParser、LitJson 等扩展库，支撑 ECS 框架、配置加载与表达式解析。
+
+5. UI 与场景结构
+主要演示场景包括 RpgExample Scene 与技能调试场景 ExecutionLinkScene，以及第三方资源包自带测试场景。
+
+UnityAppRun 在示例场景中绑定 Hero/Enemies 节点，连接血条 Canvas、HealthView 组件，实现 UI 与 CombatEntity 的视图同步。
+
+6. 数据流与资源配置
+Excel → ScriptableObject：通过 Excel（如 AbilityConfig.xlsx）维护技能参数，再利用编辑器工具导出 JSON 与配置类，并在 Project 面板创建对应的 AbilityConfigObject。
+
+ScriptableObject → 运行时实体：AbilityConfigObject 提供技能 ID、触发点、效果集合，并通过 Odin Inspector 自定义 Inspector 以反射方式构建效果实例。
+
+资源定位：AbilityManagerObject 统一管理技能、Buff、执行体的资源路径常量，供运行时加载执行体或 Buff 配置。
+
+运行时加载：ConfigManageComponent 使用 ReferenceCollector 管理配置资源集合，被 UnityAppRun 注入到 Game 实例，供 AppStatic.Config 获取配置数据。
+
+执行流程：AbilitySystem 在 Awake 阶段读取配置、初始化触发器与效果，并按需要加载 ExecutionObject；CombatEntity 通过 SpellAbility、DamageAbility 等行动能力触发技能执行。
+
+7. 关键配置与脚本
+AbilityConfigObject：脚本化对象定义技能属性、目标与效果列表，是设计器的核心入口。
+
+AbilityManagerObject：集中维护资源路径常量与效果描述，便于统一管理技能资源目录。
+
+AppStatic / UnityAppStatic：提供全局状态（时间、玩家 Actor、配置组件等），串联系统层与视图层上下文。
+
+UnityAppRun：示例入口；若要移植，需要根据 README 指引将相关目录与条件编译宏迁移至目标工程。
+
+8. 使用方法
+在 Excel 中新增技能配置，使用菜单导出配置类与 JSON。
+
+通过菜单 能力/能力配置 创建 ScriptableObject，配置技能效果与触发器。
+
+通过 能力/Execution 创建执行体资源，配置表现片段。
+
+运行时将技能挂载到 CombatEntity，借助 SpellAbility 触发施法。
+
+9. 扩展建议
+缓存效果类型反射结果：AbilityConfigObject 每次添加效果都对程序集做反射查询，建议构建静态缓存以减少编辑器端频繁反射带来的开销。
+
+能力实例池化：AbilitySystem.Attach 为每个能力创建新实体并登记到字典，若频繁增删可考虑对象池以降低 GC 压力。
+
+输入系统扩展：当前 PlayerInputSystem 聚焦地面点击移动，可在同一结构下扩展技能快捷键、目标选择等输入，保持 DOTween 与 AnimationSystem 的状态管理一致。
+
+10. 性能考虑
+运行时反射：AbilitySystem Awake 阶段依赖配置数据进行反射创建效果/触发器，可在编辑期生成序列化数据或使用代码生成减少运行期开销。
+
+Tween 与动画控制：PlayerInputSystem 使用 DOTween 控制角色移动，需确保频繁 StopMove/DisableMove 时及时 Kill Tweener，避免无效 tween 堆积。
+
+配置加载：ConfigManageComponent 借助 ReferenceCollector 存放配置集合，建议在大量配置时采用按需加载或地址可寻资源以降低初始加载压力。
